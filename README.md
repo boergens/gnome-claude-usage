@@ -2,56 +2,98 @@
 
 A GNOME Shell extension that displays your Claude Code usage (session and weekly remaining) in the top panel.
 
+![Panel showing: 🤖 W:89% S:64%](https://img.shields.io/badge/🤖_W:89%25_S:64%25-blue)
+
+## Features
+
+- Shows weekly and session usage remaining in the GNOME panel
+- Dropdown with detailed usage info including extra usage
+- Auto-refreshes every 5 minutes
+- Manual refresh button
+- Works with Claude Max/Pro subscriptions
+
 ## Requirements
 
-- GNOME Shell 45 or later (uses ESM modules)
+- GNOME Shell 42-47
+- `tmux` installed
+- `python3` installed
 - Claude Code CLI installed and authenticated
+
+## GNOME Version Compatibility
+
+| GNOME Version | Extension File | Notes |
+|---------------|----------------|-------|
+| 45, 46, 47 | `extension.js` | Uses ESM modules (modern) |
+| 42, 43, 44 | `extension_legacy.js` | Uses legacy imports |
+
+The `install.sh` script automatically detects your GNOME version and uses the appropriate file.
 
 ## Installation
 
-### Option 1: Manual Installation
+### Using the install script (recommended)
+
+```bash
+git clone https://github.com/boergens/gnome-claude-usage.git
+cd gnome-claude-usage
+./install.sh
+```
+
+Then restart GNOME Shell:
+- **X11:** Press `Alt+F2`, type `r`, press Enter
+- **Wayland:** Log out and log back in
+
+Enable the extension:
+```bash
+gnome-extensions enable claude-usage@local
+```
+
+### Manual Installation
 
 1. Copy the extension to your GNOME extensions directory:
-
 ```bash
 mkdir -p ~/.local/share/gnome-shell/extensions/
 cp -r claude-usage@local ~/.local/share/gnome-shell/extensions/
 ```
 
-2. Restart GNOME Shell:
-   - On X11: Press `Alt+F2`, type `r`, press Enter
-   - On Wayland: Log out and log back in
-
-3. Enable the extension:
-
+2. For GNOME 42-44, swap to the legacy extension:
 ```bash
-gnome-extensions enable claude-usage@local
+cd ~/.local/share/gnome-shell/extensions/claude-usage@local
+mv extension.js extension_modern.js
+mv extension_legacy.js extension.js
 ```
 
-### Option 2: Using gnome-extensions-cli
-
-```bash
-# If you have gnome-extensions-cli installed
-gnome-extensions install claude-usage@local/
-gnome-extensions enable claude-usage@local
-```
+3. Restart GNOME Shell and enable the extension.
 
 ## Usage
 
-Once enabled, you'll see a robot emoji (🤖) with a percentage in your top panel. This shows your remaining weekly Claude usage.
+Once enabled, you'll see in your top panel:
+```
+🤖 W:89% S:64%
+```
+- **W:** Weekly usage remaining
+- **S:** Session usage remaining
 
-Click on it to see:
+Click to see:
 - Session remaining percentage
-- Weekly remaining percentage
-- Last update time
+- Weekly remaining percentage (with extra usage if applicable)
+- Last update timestamp
 - Manual refresh button
 
-The extension automatically refreshes every 5 minutes.
+## How it Works
+
+Since Claude Code's `/usage` command only works in interactive mode, this extension uses a clever workaround:
+
+1. Starts a `tmux` session with `claude --dangerously-skip-permissions`
+2. Simulates typing `/usage` with proper timing
+3. Captures the terminal output
+4. Parses the usage percentages
+5. Cleans up the tmux session
+
+The fetch script takes ~10 seconds to run, so the extension refreshes every 5 minutes by default.
 
 ## Configuration
 
-To change the refresh interval, edit `extension.js` and modify:
-
+To change the refresh interval, edit `extension.js`:
 ```javascript
 const REFRESH_INTERVAL_SECONDS = 300; // Change to desired seconds
 ```
@@ -60,27 +102,25 @@ const REFRESH_INTERVAL_SECONDS = 300; // Change to desired seconds
 
 ### "Error" shown in panel
 
-1. Make sure `claude` CLI is installed and in your PATH
-2. Check that you're authenticated with Claude Code
-3. Look at GNOME Shell logs: `journalctl -f -o cat /usr/bin/gnome-shell`
+1. Make sure `claude` CLI is in your PATH
+2. Make sure `tmux` is installed: `sudo apt install tmux` or `brew install tmux`
+3. Check that you're authenticated with Claude Code
+4. Test the fetch script manually:
+   ```bash
+   ~/.local/share/gnome-shell/extensions/claude-usage@local/fetch_usage.sh
+   ```
+5. Check GNOME Shell logs: `journalctl -f -o cat /usr/bin/gnome-shell`
 
 ### Extension not appearing
 
 1. Verify the extension is enabled: `gnome-extensions list --enabled`
 2. Check for errors: `gnome-extensions info claude-usage@local`
 
-### Usage not parsing correctly
+### Wrong GNOME version file
 
-The extension tries to parse percentage values from the `/usage` command output. If Claude changes their output format, the parsing logic in `_parseUsage()` may need updating.
-
-## How it Works
-
-The extension runs `fetch_usage.sh` which:
-1. Locates the Claude CLI
-2. Runs `claude -p "/usage"` to get usage info non-interactively
-3. Returns the output for parsing
-
-The extension then parses the output looking for percentage values and displays the remaining usage.
+If you see import errors, you may have the wrong extension.js for your GNOME version:
+- GNOME 45+: Use `extension.js` (ESM modules)
+- GNOME 42-44: Use `extension_legacy.js` (rename to `extension.js`)
 
 ## Uninstalling
 
@@ -88,3 +128,7 @@ The extension then parses the output looking for percentage values and displays 
 gnome-extensions disable claude-usage@local
 rm -rf ~/.local/share/gnome-shell/extensions/claude-usage@local
 ```
+
+## License
+
+MIT

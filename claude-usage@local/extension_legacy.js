@@ -111,58 +111,31 @@ function fetchUsage() {
 
 function parseUsage(output) {
     try {
+        // Parse key=value format from fetch_usage.sh
         const lines = output.split('\n');
-        let sessionPercent = null;
-        let weeklyPercent = null;
+        const data = {};
 
         for (const line of lines) {
-            const lowerLine = line.toLowerCase();
-
-            if (lowerLine.includes('session') || lowerLine.includes('current')) {
-                const match = line.match(/(\d+(?:\.\d+)?)\s*%/);
-                if (match) {
-                    sessionPercent = parseFloat(match[1]);
-                }
-            }
-
-            if (lowerLine.includes('week')) {
-                const match = line.match(/(\d+(?:\.\d+)?)\s*%/);
-                if (match) {
-                    weeklyPercent = parseFloat(match[1]);
-                }
-            }
-
-            if (sessionPercent === null && (lowerLine.includes('session') || lowerLine.includes('current'))) {
-                const fractionMatch = line.match(/(\d+)\s*\/\s*(\d+)/);
-                if (fractionMatch) {
-                    sessionPercent = (parseInt(fractionMatch[1]) / parseInt(fractionMatch[2])) * 100;
-                }
-            }
-
-            if (weeklyPercent === null && lowerLine.includes('week')) {
-                const fractionMatch = line.match(/(\d+)\s*\/\s*(\d+)/);
-                if (fractionMatch) {
-                    weeklyPercent = (parseInt(fractionMatch[1]) / parseInt(fractionMatch[2])) * 100;
-                }
+            const match = line.match(/^([A-Z_]+)=(.+)$/);
+            if (match) {
+                data[match[1]] = match[2];
             }
         }
 
-        if (sessionPercent === null && weeklyPercent === null) {
-            const allPercents = output.match(/(\d+(?:\.\d+)?)\s*%/g);
-            if (allPercents && allPercents.length >= 2) {
-                sessionPercent = parseFloat(allPercents[0]);
-                weeklyPercent = parseFloat(allPercents[1]);
-            } else if (allPercents && allPercents.length === 1) {
-                weeklyPercent = parseFloat(allPercents[0]);
-            }
-        }
+        // Get remaining percentages (already calculated by script)
+        const sessionRemaining = data['SESSION_REMAINING'] || '??';
+        const weeklyRemaining = data['WEEKLY_REMAINING'] || '??';
+        const extraUsed = data['EXTRA_USED'];
 
-        const sessionRemaining = sessionPercent !== null ? (100 - sessionPercent).toFixed(1) : '??';
-        const weeklyRemaining = weeklyPercent !== null ? (100 - weeklyPercent).toFixed(1) : '??';
+        // Show weekly and session remaining in panel
+        panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
 
-        panelLabel.set_text(`🤖 ${weeklyRemaining}%`);
         sessionMenuItem.label.set_text(`Session remaining: ${sessionRemaining}%`);
         weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}%`);
+
+        if (extraUsed) {
+            weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}% (Extra: ${extraUsed}% used)`);
+        }
 
         const now = new Date();
         lastUpdatedMenuItem.label.set_text(`Last updated: ${now.toLocaleTimeString()}`);
