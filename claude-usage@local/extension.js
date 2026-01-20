@@ -16,6 +16,7 @@ export default class ClaudeUsageExtension extends Extension {
     _timeout = null;
     _sessionUsage = 'Loading...';
     _weeklyUsage = 'Loading...';
+    _timeRemaining = null;
     _lastUpdated = '';
 
     enable() {
@@ -33,6 +34,12 @@ export default class ClaudeUsageExtension extends Extension {
         this._sessionMenuItem = new PopupMenu.PopupMenuItem('Session: Loading...');
         this._sessionMenuItem.sensitive = false;
         this._indicator.menu.addMenuItem(this._sessionMenuItem);
+
+        this._timeRemainingMenuItem = new PopupMenu.PopupMenuItem('Time remaining: --');
+        this._timeRemainingMenuItem.sensitive = false;
+        this._indicator.menu.addMenuItem(this._timeRemainingMenuItem);
+
+        this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         this._weeklyMenuItem = new PopupMenu.PopupMenuItem('Weekly: Loading...');
         this._weeklyMenuItem.sensitive = false;
@@ -127,19 +134,38 @@ export default class ClaudeUsageExtension extends Extension {
             const sessionRemaining = data['SESSION_REMAINING'] || '??';
             const weeklyRemaining = data['WEEKLY_REMAINING'] || '??';
             const extraUsed = data['EXTRA_USED'];
+            const timeRemainingStr = data['TIME_REMAINING_STR'];
+            const confidence = data['CONFIDENCE'];
 
             // Update UI
             this._sessionUsage = `${sessionRemaining}%`;
             this._weeklyUsage = `${weeklyRemaining}%`;
+            this._timeRemaining = timeRemainingStr;
 
-            // Show weekly remaining in panel
-            this._panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
+            // Show time remaining in panel if available, otherwise show percentages
+            if (timeRemainingStr) {
+                this._panelLabel.set_text(`🤖 ${timeRemainingStr} (${sessionRemaining}%)`);
+            } else {
+                this._panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
+            }
 
             this._sessionMenuItem.label.set_text(`Session remaining: ${sessionRemaining}%`);
+
+            // Show predicted time remaining
+            if (timeRemainingStr) {
+                let timeText = `Predicted time left: ~${timeRemainingStr}`;
+                if (confidence) {
+                    const conf = Math.round(parseFloat(confidence) * 100);
+                    timeText += ` (${conf}% conf)`;
+                }
+                this._timeRemainingMenuItem.label.set_text(timeText);
+            } else {
+                this._timeRemainingMenuItem.label.set_text('Predicted time left: --');
+            }
+
             this._weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}%`);
 
             if (extraUsed) {
-                // Add extra usage info if available
                 this._weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}% (Extra: ${extraUsed}% used)`);
             }
 

@@ -18,6 +18,7 @@ let indicator = null;
 let timeout = null;
 let panelLabel = null;
 let sessionMenuItem = null;
+let timeRemainingMenuItem = null;
 let weeklyMenuItem = null;
 let lastUpdatedMenuItem = null;
 
@@ -37,6 +38,12 @@ function enable() {
     sessionMenuItem = new PopupMenu.PopupMenuItem('Session: Loading...');
     sessionMenuItem.sensitive = false;
     indicator.menu.addMenuItem(sessionMenuItem);
+
+    timeRemainingMenuItem = new PopupMenu.PopupMenuItem('Time remaining: --');
+    timeRemainingMenuItem.sensitive = false;
+    indicator.menu.addMenuItem(timeRemainingMenuItem);
+
+    indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
     weeklyMenuItem = new PopupMenu.PopupMenuItem('Weekly: Loading...');
     weeklyMenuItem.sensitive = false;
@@ -126,11 +133,30 @@ function parseUsage(output) {
         const sessionRemaining = data['SESSION_REMAINING'] || '??';
         const weeklyRemaining = data['WEEKLY_REMAINING'] || '??';
         const extraUsed = data['EXTRA_USED'];
+        const timeRemainingStr = data['TIME_REMAINING_STR'];
+        const confidence = data['CONFIDENCE'];
 
-        // Show weekly and session remaining in panel
-        panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
+        // Show time remaining in panel if available, otherwise show percentages
+        if (timeRemainingStr) {
+            panelLabel.set_text(`🤖 ${timeRemainingStr} (${sessionRemaining}%)`);
+        } else {
+            panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
+        }
 
         sessionMenuItem.label.set_text(`Session remaining: ${sessionRemaining}%`);
+
+        // Show predicted time remaining
+        if (timeRemainingStr) {
+            let timeText = `Predicted time left: ~${timeRemainingStr}`;
+            if (confidence) {
+                const conf = Math.round(parseFloat(confidence) * 100);
+                timeText += ` (${conf}% conf)`;
+            }
+            timeRemainingMenuItem.label.set_text(timeText);
+        } else {
+            timeRemainingMenuItem.label.set_text('Predicted time left: --');
+        }
+
         weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}%`);
 
         if (extraUsed) {

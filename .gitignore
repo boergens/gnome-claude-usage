@@ -8,3 +8,11 @@
 
 # Temp files
 *.tmp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model files (user-specific)
+*.pt
