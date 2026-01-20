@@ -44,11 +44,17 @@ class ClaudeUsageApp(rumps.App):
         self.session_item = rumps.MenuItem("Session: Loading...", callback=None)
         self.session_item.set_callback(None)
 
-        self.time_remaining_item = rumps.MenuItem("Time remaining: --", callback=None)
+        self.time_remaining_item = rumps.MenuItem("Depletes: --", callback=None)
         self.time_remaining_item.set_callback(None)
+
+        self.session_resets_item = rumps.MenuItem("Resets: --", callback=None)
+        self.session_resets_item.set_callback(None)
 
         self.weekly_item = rumps.MenuItem("Weekly: Loading...", callback=None)
         self.weekly_item.set_callback(None)
+
+        self.weekly_resets_item = rumps.MenuItem("Resets: --", callback=None)
+        self.weekly_resets_item.set_callback(None)
 
         self.last_updated_item = rumps.MenuItem("Last updated: Never", callback=None)
         self.last_updated_item.set_callback(None)
@@ -58,8 +64,10 @@ class ClaudeUsageApp(rumps.App):
             None,  # Separator
             self.session_item,
             self.time_remaining_item,
+            self.session_resets_item,
             None,  # Separator
             self.weekly_item,
+            self.weekly_resets_item,
             None,  # Separator
             self.last_updated_item,
             None,  # Separator
@@ -195,6 +203,13 @@ class ClaudeUsageApp(rumps.App):
             extra_match = re.search(r"Extra usage.*?(\d+)%\s*used", output, re.DOTALL)
             extra_pct = extra_match.group(1) if extra_match else None
 
+            # Find reset times
+            session_reset_match = re.search(r"(?:session|limit).*?(?:resets?|refreshes?).*?(?:in\s+)?(\d+[hm](?:\s*\d+[hm])?|\d{1,2}:\d{2}(?:\s*[AP]M)?)", output, re.IGNORECASE)
+            session_resets = session_reset_match.group(1) if session_reset_match else None
+
+            weekly_reset_match = re.search(r"(?:week|weekly).*?(?:resets?|refreshes?).*?(?:in\s+)?(\d+[dhm](?:\s*\d+[hm])?|\w+day|\d{1,2}:\d{2})", output, re.IGNORECASE)
+            weekly_resets = weekly_reset_match.group(1) if weekly_reset_match else None
+
             # Calculate remaining
             session_used = int(session_pct) if session_pct else None
             session_remaining = 100 - session_used if session_used is not None else "??"
@@ -213,7 +228,11 @@ class ClaudeUsageApp(rumps.App):
 
                     # Record observation for future training
                     if weekly_used is not None:
-                        predictor.record_observation(session_used, weekly_used)
+                        predictor.record_observation(
+                            session_used, weekly_used,
+                            session_resets=session_resets,
+                            weekly_resets=weekly_resets
+                        )
 
                     # Get prediction
                     result = predictor.predict_depletion(session_used)
@@ -249,18 +268,30 @@ class ClaudeUsageApp(rumps.App):
             self.session_item.title = f"Session remaining: {session_remaining}%"
 
             if time_remaining_str:
-                time_text = f"Predicted time left: ~{time_remaining_str}"
+                time_text = f"Depletes in ~{time_remaining_str}"
                 if confidence:
                     conf = round(confidence * 100)
                     time_text += f" ({conf}% conf)"
                 self.time_remaining_item.title = time_text
             else:
-                self.time_remaining_item.title = "Predicted time left: --"
+                self.time_remaining_item.title = "Depletes: --"
+
+            # Session reset time (from Claude)
+            if session_resets:
+                self.session_resets_item.title = f"Resets in {session_resets}"
+            else:
+                self.session_resets_item.title = "Resets: --"
 
             weekly_text = f"Weekly remaining: {weekly_remaining}%"
             if extra_pct:
                 weekly_text += f" (Extra: {extra_pct}% used)"
             self.weekly_item.title = weekly_text
+
+            # Weekly reset time (from Claude)
+            if weekly_resets:
+                self.weekly_resets_item.title = f"Resets in {weekly_resets}"
+            else:
+                self.weekly_resets_item.title = "Resets: --"
 
             from datetime import datetime
             self.last_updated_item.title = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"

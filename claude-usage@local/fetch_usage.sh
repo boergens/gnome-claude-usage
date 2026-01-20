@@ -87,6 +87,14 @@ account_email = account_match.group(1) if account_match else None
 plan_match = re.search(r"(Max|Pro|Team|Enterprise|Free)", account_text, re.IGNORECASE)
 plan_type = plan_match.group(1) if plan_match else None
 
+# Find session reset time (various formats)
+session_reset_match = re.search(r"(?:session|limit).*?(?:resets?|refreshes?).*?(?:in\s+)?(\d+[hm](?:\s*\d+[hm])?|\d{1,2}:\d{2}(?:\s*[AP]M)?)", text, re.IGNORECASE)
+session_reset = session_reset_match.group(1) if session_reset_match else None
+
+# Find weekly reset time
+weekly_reset_match = re.search(r"(?:week|weekly).*?(?:resets?|refreshes?).*?(?:in\s+)?(\d+[dhm](?:\s*\d+[hm])?|\w+day|\d{1,2}:\d{2})", text, re.IGNORECASE)
+weekly_reset = weekly_reset_match.group(1) if weekly_reset_match else None
+
 # Find session usage
 session_match = re.search(r"Current session.*?(\d+)%\s*used", text, re.DOTALL)
 session_pct = session_match.group(1) if session_match else None
@@ -136,6 +144,12 @@ if account_email:
 if plan_type:
     print(f"PLAN_TYPE={plan_type}")
 
+# Output reset times
+if session_reset:
+    print(f"SESSION_RESETS={session_reset}")
+if weekly_reset:
+    print(f"WEEKLY_RESETS={weekly_reset}")
+
 # Try to get predictions from neural process
 time_remaining = None
 time_remaining_str = "??"
@@ -146,9 +160,13 @@ if session_used is not None:
         from neural_process import UsagePredictor
         predictor = UsagePredictor()
 
-        # Record observation for future training
+        # Record observation for future training (with reset times if available)
         if weekly_used is not None:
-            predictor.record_observation(session_used, weekly_used)
+            predictor.record_observation(
+                session_used, weekly_used,
+                session_resets=session_reset,
+                weekly_resets=weekly_reset
+            )
 
         # Get prediction
         result = predictor.predict_depletion(session_used)

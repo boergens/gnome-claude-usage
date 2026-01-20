@@ -230,8 +230,9 @@ class UsagePredictor:
             'model_state_dict': self.model.state_dict(),
         }, self.model_path)
 
-    def record_observation(self, session_pct_used: float, weekly_pct_used: float):
-        """Record a usage observation."""
+    def record_observation(self, session_pct_used: float, weekly_pct_used: float,
+                           session_resets: str = None, weekly_resets: str = None):
+        """Record a usage observation with optional reset times from Claude."""
         history_file = self.data_dir / "observations.jsonl"
 
         observation = {
@@ -239,6 +240,12 @@ class UsagePredictor:
             "session_pct_used": session_pct_used,
             "weekly_pct_used": weekly_pct_used,
         }
+
+        # Store actual reset times from Claude if available
+        if session_resets:
+            observation["session_resets"] = session_resets
+        if weekly_resets:
+            observation["weekly_resets"] = weekly_resets
 
         with open(history_file, "a") as f:
             f.write(json.dumps(observation) + "\n")
@@ -259,25 +266,40 @@ class UsagePredictor:
         if len(observations) < 10:
             return self._generate_synthetic_curves(10)
 
-        # Group observations into sessions (5-hour windows)
+        # Group observations into sessions using actual reset times or timestamps
         curves = []
         current_curve = []
-        last_session_pct = 0
+        last_timestamp = None
+        last_session_reset = None
 
         for obs in observations:
             session_pct = obs['session_pct_used']
+            timestamp = datetime.fromisoformat(obs['timestamp'])
+            session_resets = obs.get('session_resets')
 
-            # Detect session reset (new session started)
-            if session_pct < last_session_pct - 1:
-                if len(current_curve) >= 5:
-                    # Normalize curve to 100 points
-                    curve = self._normalize_curve(current_curve)
-                    curves.append(curve)
+            # Detect new session by:
+            # 1. Reset time changed (explicit from Claude)
+            # 2. Usage dropped significantly (fallback)
+            # 3. Large time gap (> 6 hours suggests new session)
+            new_session = False
+
+            if session_resets and session_resets != last_session_reset:
+                new_session = True
+            elif last_timestamp and (timestamp - last_timestamp).total_seconds() > 6 * 3600:
+                new_session = True
+            elif current_curve and session_pct < (1 - current_curve[-1]) * 100 - 5:
+                # Usage dropped by more than 5% - likely reset
+                new_session = True
+
+            if new_session and len(current_curve) >= 5:
+                curve = self._normalize_curve(current_curve)
+                curves.append(curve)
                 current_curve = []
 
             # Store as "remaining" (1 - used)
             current_curve.append(1.0 - session_pct / 100.0)
-            last_session_pct = session_pct
+            last_timestamp = timestamp
+            last_session_reset = session_resets
 
         if len(curves) < 5:
             return self._generate_synthetic_curves(10)
