@@ -104,14 +104,41 @@ class ClaudeUsageApp(rumps.App):
         """Periodic refresh timer."""
         threading.Thread(target=self.fetch_usage, daemon=True).start()
 
+    def _update_on_main_thread(self, func, *args, **kwargs):
+        """Schedule a function to run on the main thread for UI updates."""
+        try:
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(func, *args, **kwargs)
+        except ImportError:
+            func(*args, **kwargs)  # Fallback: run directly
+
+    def _set_loading_state(self, start_time):
+        """Set loading state in UI (called on main thread)."""
+        self.title = "🤖 ⟳"
+        self.status_item.title = f"Status: Fetching (started {start_time})..."
+        self.debug_item.title = "Debug: Running fetch_usage.sh"
+
+    def _set_parsing_state(self):
+        """Set parsing state in UI (called on main thread)."""
+        self.status_item.title = "Status: Parsing output..."
+
+    def _set_ok_state(self, timestamp):
+        """Set OK state in UI (called on main thread)."""
+        self.status_item.title = f"Status: OK @ {timestamp}"
+
+    def _set_error_state(self, debug_msg, status_msg, error_msg):
+        """Set error state in UI (called on main thread)."""
+        self.debug_item.title = debug_msg
+        self.status_item.title = status_msg
+        self.set_error(error_msg)
+
     def fetch_usage(self):
         """Fetch Claude usage by calling fetch_usage.sh script."""
         from datetime import datetime
 
-        # Show loading state
-        self.title = "🤖 ⟳"
-        self.status_item.title = f"Status: Fetching (started {datetime.now().strftime('%H:%M:%S')})..."
-        self.debug_item.title = "Debug: Running fetch_usage.sh"
+        # Show loading state (on main thread)
+        start_time = datetime.now().strftime('%H:%M:%S')
+        self._update_on_main_thread(self._set_loading_state, start_time)
 
         try:
             # Call the fetch_usage.sh script directly
@@ -127,23 +154,33 @@ class ClaudeUsageApp(rumps.App):
 
             if result.returncode != 0:
                 stderr_preview = result.stderr[:100].replace('\n', ' ') if result.stderr else "no stderr"
-                self.debug_item.title = f"Debug: exit={result.returncode} {stderr_preview}"
-                self.set_error(f"Script exit {result.returncode}")
+                self._update_on_main_thread(
+                    self._set_error_state,
+                    f"Debug: exit={result.returncode} {stderr_preview}",
+                    f"Status: Error @ {datetime.now().strftime('%H:%M:%S')}",
+                    f"Script exit {result.returncode}"
+                )
                 return
 
             # Parse the key=value output from the script
-            self.status_item.title = "Status: Parsing output..."
-            self.parse_script_output(result.stdout)
-            self.status_item.title = f"Status: OK @ {datetime.now().strftime('%H:%M:%S')}"
+            self._update_on_main_thread(self._set_parsing_state)
+            self._update_on_main_thread(self.parse_script_output, result.stdout)
+            self._update_on_main_thread(self._set_ok_state, datetime.now().strftime('%H:%M:%S'))
 
         except subprocess.TimeoutExpired:
-            self.debug_item.title = "Debug: Timeout after 90s"
-            self.status_item.title = f"Status: Timeout @ {datetime.now().strftime('%H:%M:%S')}"
-            self.set_error("Timeout (90s)")
+            self._update_on_main_thread(
+                self._set_error_state,
+                "Debug: Timeout after 90s",
+                f"Status: Timeout @ {datetime.now().strftime('%H:%M:%S')}",
+                "Timeout (90s)"
+            )
         except Exception as e:
-            self.debug_item.title = f"Debug: {type(e).__name__}: {str(e)[:40]}"
-            self.status_item.title = f"Status: Error @ {datetime.now().strftime('%H:%M:%S')}"
-            self.set_error(str(e)[:20])
+            self._update_on_main_thread(
+                self._set_error_state,
+                f"Debug: {type(e).__name__}: {str(e)[:40]}",
+                f"Status: Error @ {datetime.now().strftime('%H:%M:%S')}",
+                str(e)[:20]
+            )
 
     def parse_script_output(self, output):
         """Parse key=value output from fetch_usage.sh and update UI."""
