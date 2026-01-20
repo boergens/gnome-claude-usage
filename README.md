@@ -7,6 +7,7 @@ Display your Claude Code usage (session and weekly remaining) in your desktop pa
 **Supported platforms:**
 - **GNOME Shell** (Linux) - Extension for top panel
 - **macOS** - Menu bar utility
+- **Windows** - System tray utility
 
 ## Features
 
@@ -24,6 +25,7 @@ Display your Claude Code usage (session and weekly remaining) in your desktop pa
 - Claude Code CLI installed and authenticated
 - **GNOME:** GNOME Shell 42-47
 - **macOS:** Python with `rumps` package
+- **Windows:** Python with `pystray` and `pillow` packages
 
 ## macOS Installation
 
@@ -65,6 +67,34 @@ Then load it:
 ```bash
 launchctl load ~/Library/LaunchAgents/com.claude.usage.plist
 ```
+
+---
+
+## Windows Installation
+
+### Quick start
+
+```powershell
+git clone https://github.com/boergens/claude-usage-monitor.git
+cd claude-usage-monitor\windows
+pip install pystray pillow torch
+python claude_usage_tray.py
+```
+
+Or double-click `run.bat`.
+
+### For best results
+
+Install tmux via WSL (Windows Subsystem for Linux) for reliable Claude interaction:
+
+1. Enable WSL: `wsl --install`
+2. Install tmux in WSL: `sudo apt install tmux`
+3. The app will automatically use WSL+tmux for fetching usage
+
+### Running at startup
+
+1. Press `Win+R`, type `shell:startup`, press Enter
+2. Create a shortcut to `run.bat` in that folder
 
 ---
 
@@ -195,6 +225,20 @@ const REFRESH_INTERVAL_SECONDS = 300; // Change to desired seconds
 
 1. Install PyTorch: `pip install torch`
 2. Check that `neural_process.py` is accessible from `claude-usage@local/`
+
+### Windows: Icon not appearing in system tray
+
+1. Check that Python is in your PATH
+2. Install required packages: `pip install pystray pillow`
+3. Run from command prompt to see errors: `python claude_usage_tray.py`
+
+### Windows: Usage not fetching
+
+1. For best results, install WSL and tmux:
+   - `wsl --install` (restart required)
+   - In WSL: `sudo apt install tmux`
+2. Make sure `claude` CLI is installed and in PATH
+3. The app falls back to PowerShell if tmux isn't available, but this is less reliable
 
 ### GNOME: "Error" shown in panel
 
