@@ -1,5 +1,14 @@
 #!/bin/bash
 # Fetch Claude Code usage information using tmux to interact with claude CLI
+#
+# Usage:
+#   ./fetch_usage.sh          # Normal mode - outputs key=value pairs
+#   ./fetch_usage.sh --debug  # Debug mode - shows raw tmux output
+
+DEBUG_MODE=false
+if [[ "$1" == "--debug" || "$1" == "-d" ]]; then
+    DEBUG_MODE=true
+fi
 
 SESSION_NAME="claude_usage_fetch_$$"
 
@@ -44,6 +53,23 @@ sleep 1
 # Capture the account info
 ACCOUNT_OUTPUT=$(tmux capture-pane -t "$SESSION_NAME" -p)
 
+# Debug mode: show raw output and exit
+if $DEBUG_MODE; then
+    echo "=== RAW USAGE OUTPUT ==="
+    echo "$OUTPUT"
+    echo ""
+    echo "=== RAW ACCOUNT OUTPUT ==="
+    echo "$ACCOUNT_OUTPUT"
+    echo ""
+    # Clean up and exit
+    tmux send-keys -t "$SESSION_NAME" Escape
+    sleep 0.5
+    tmux send-keys -t "$SESSION_NAME" '/exit' Enter
+    sleep 1
+    tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+    exit 0
+fi
+
 # Kill the session
 tmux send-keys -t "$SESSION_NAME" Escape
 sleep 0.5
@@ -87,12 +113,12 @@ account_email = account_match.group(1) if account_match else None
 plan_match = re.search(r"(Max|Pro|Team|Enterprise|Free)", account_text, re.IGNORECASE)
 plan_type = plan_match.group(1) if plan_match else None
 
-# Find session reset time (various formats)
-session_reset_match = re.search(r"(?:session|limit).*?(?:resets?|refreshes?).*?(?:in\s+)?(\d+[hm](?:\s*\d+[hm])?|\d{1,2}:\d{2}(?:\s*[AP]M)?)", text, re.IGNORECASE)
+# Find session reset time - format: "Resets 9:59am (America/Chicago)" after "Current session"
+session_reset_match = re.search(r"Current session.*?Resets\s+(\d{1,2}:\d{2}[ap]m)", text, re.DOTALL | re.IGNORECASE)
 session_reset = session_reset_match.group(1) if session_reset_match else None
 
-# Find weekly reset time
-weekly_reset_match = re.search(r"(?:week|weekly).*?(?:resets?|refreshes?).*?(?:in\s+)?(\d+[dhm](?:\s*\d+[hm])?|\w+day|\d{1,2}:\d{2})", text, re.IGNORECASE)
+# Find weekly reset time - format: "Resets Jan 24 at 7:59pm (America/Chicago)" after "Current week (all models)"
+weekly_reset_match = re.search(r"Current week \(all models\).*?Resets\s+(\w+\s+\d+\s+at\s+\d{1,2}:\d{2}[ap]m)", text, re.DOTALL | re.IGNORECASE)
 weekly_reset = weekly_reset_match.group(1) if weekly_reset_match else None
 
 # Find session usage
