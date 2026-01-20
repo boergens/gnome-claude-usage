@@ -30,8 +30,8 @@ Display your Claude Code usage (session and weekly remaining) in your desktop pa
 ### Quick start
 
 ```bash
-git clone https://github.com/boergens/gnome-claude-usage.git
-cd gnome-claude-usage/macos
+git clone https://github.com/boergens/claude-usage-monitor.git
+cd claude-usage-monitor/macos
 pip install rumps torch
 ./run.sh
 ```
@@ -53,7 +53,7 @@ Example LaunchAgent (`~/Library/LaunchAgents/com.claude.usage.plist`):
     <string>com.claude.usage</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/path/to/gnome-claude-usage/macos/run.sh</string>
+        <string>/path/to/claude-usage-monitor/macos/run.sh</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -84,8 +84,8 @@ The `install.sh` script automatically detects your GNOME version and uses the ap
 ### Using the install script (recommended)
 
 ```bash
-git clone https://github.com/boergens/gnome-claude-usage.git
-cd gnome-claude-usage
+git clone https://github.com/boergens/claude-usage-monitor.git
+cd claude-usage-monitor
 ./install.sh
 ```
 

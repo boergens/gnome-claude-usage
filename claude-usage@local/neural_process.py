@@ -268,7 +268,7 @@ class UsagePredictor:
             session_pct = obs['session_pct_used']
 
             # Detect session reset (new session started)
-            if session_pct < last_session_pct - 10:
+            if session_pct < last_session_pct - 1:
                 if len(current_curve) >= 5:
                     # Normalize curve to 100 points
                     curve = self._normalize_curve(current_curve)
