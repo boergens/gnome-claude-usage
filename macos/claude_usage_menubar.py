@@ -37,6 +37,11 @@ class ClaudeUsageApp(rumps.App):
             quit_button=None
         )
 
+        # Cache for last known good values
+        self.last_good_data = None
+        self.last_successful_fetch = None
+        self.is_stale = False
+
         # Menu items
         self.account_item = rumps.MenuItem("Account: --", callback=None)
         self.account_item.set_callback(None)
@@ -62,6 +67,9 @@ class ClaudeUsageApp(rumps.App):
         self.debug_item = rumps.MenuItem("Debug: --", callback=None)
         self.debug_item.set_callback(None)
 
+        self.status_item = rumps.MenuItem("Status: Starting...", callback=None)
+        self.status_item.set_callback(None)
+
         self.menu = [
             self.account_item,
             None,  # Separator
@@ -73,6 +81,7 @@ class ClaudeUsageApp(rumps.App):
             self.weekly_resets_item,
             None,  # Separator
             self.last_updated_item,
+            self.status_item,
             self.debug_item,
             None,  # Separator
             rumps.MenuItem("Refresh Now", callback=self.refresh_clicked),
@@ -97,9 +106,12 @@ class ClaudeUsageApp(rumps.App):
 
     def fetch_usage(self):
         """Fetch Claude usage by calling fetch_usage.sh script."""
+        from datetime import datetime
+
         # Show loading state
         self.title = "🤖 ⟳"
-        self.debug_item.title = "Debug: Fetching..."
+        self.status_item.title = f"Status: Fetching (started {datetime.now().strftime('%H:%M:%S')})..."
+        self.debug_item.title = "Debug: Running fetch_usage.sh"
 
         try:
             # Call the fetch_usage.sh script directly
@@ -114,22 +126,29 @@ class ClaudeUsageApp(rumps.App):
             )
 
             if result.returncode != 0:
-                self.debug_item.title = f"Debug: Script error - {result.stderr[:50]}"
-                self.set_error("Script error")
+                stderr_preview = result.stderr[:100].replace('\n', ' ') if result.stderr else "no stderr"
+                self.debug_item.title = f"Debug: exit={result.returncode} {stderr_preview}"
+                self.set_error(f"Script exit {result.returncode}")
                 return
 
             # Parse the key=value output from the script
+            self.status_item.title = "Status: Parsing output..."
             self.parse_script_output(result.stdout)
+            self.status_item.title = f"Status: OK @ {datetime.now().strftime('%H:%M:%S')}"
 
         except subprocess.TimeoutExpired:
-            self.debug_item.title = "Debug: Timeout (90s)"
-            self.set_error("Timeout")
+            self.debug_item.title = "Debug: Timeout after 90s"
+            self.status_item.title = f"Status: Timeout @ {datetime.now().strftime('%H:%M:%S')}"
+            self.set_error("Timeout (90s)")
         except Exception as e:
-            self.debug_item.title = f"Debug: {str(e)[:50]}"
-            self.set_error("Error")
+            self.debug_item.title = f"Debug: {type(e).__name__}: {str(e)[:40]}"
+            self.status_item.title = f"Status: Error @ {datetime.now().strftime('%H:%M:%S')}"
+            self.set_error(str(e)[:20])
 
     def parse_script_output(self, output):
         """Parse key=value output from fetch_usage.sh and update UI."""
+        from datetime import datetime
+
         try:
             # Parse key=value lines
             data = {}
@@ -139,83 +158,122 @@ class ClaudeUsageApp(rumps.App):
                     data[key.strip()] = value.strip()
 
             # Extract values
-            account_email = data.get('ACCOUNT_EMAIL')
-            plan_type = data.get('PLAN_TYPE')
             session_remaining = data.get('SESSION_REMAINING', '??')
             weekly_remaining = data.get('WEEKLY_REMAINING', '??')
-            extra_pct = data.get('EXTRA_USED')
-            time_remaining_str = data.get('TIME_REMAINING_STR')
-            confidence = data.get('CONFIDENCE')
-            session_resets = data.get('SESSION_RESETS')
-            weekly_resets = data.get('WEEKLY_RESETS')
-            exhausts_before_reset = data.get('EXHAUSTS_BEFORE_RESET') == 'true'
 
-            # Update debug - show exhaustion status
-            exhaust_str = "WARN" if exhausts_before_reset else "ok"
-            self.debug_item.title = f"Debug: OK ({len(data)} vals, {exhaust_str})"
+            # Check if we got valid data (not "??")
+            has_valid_data = session_remaining != '??' and weekly_remaining != '??'
 
-            # Update UI - show warning if will exhaust before reset
-            warning = "⚠️ " if exhausts_before_reset else ""
-            if time_remaining_str and time_remaining_str != '??':
-                self.title = f"{warning}🤖 {time_remaining_str} ({session_remaining}%)"
+            if has_valid_data:
+                # Cache the good data
+                self.last_good_data = data.copy()
+                self.last_successful_fetch = datetime.now()
+                self.is_stale = False
+                self._update_ui_from_data(data)
             else:
-                self.title = f"🤖 W:{weekly_remaining}% S:{session_remaining}%"
-
-            # Update account info
-            if account_email:
-                account_text = f"Account: {account_email}"
-                if plan_type:
-                    account_text += f" ({plan_type})"
-                self.account_item.title = account_text
-            else:
-                self.account_item.title = "Account: --"
-
-            self.session_item.title = f"Session remaining: {session_remaining}%"
-
-            if time_remaining_str and time_remaining_str != '??':
-                time_text = f"Depletes in ~{time_remaining_str}"
-                if confidence:
-                    try:
-                        conf = round(float(confidence) * 100)
-                        time_text += f" ({conf}% conf)"
-                    except:
-                        pass
-                if exhausts_before_reset:
-                    time_text += " ⚠️ before reset!"
-                self.time_remaining_item.title = time_text
-            else:
-                self.time_remaining_item.title = "Depletes: --"
-
-            # Session reset time (from Claude)
-            if session_resets:
-                reset_text = f"Resets at {session_resets}"
-                self.session_resets_item.title = reset_text
-            else:
-                self.session_resets_item.title = "Resets: --"
-
-            weekly_text = f"Weekly remaining: {weekly_remaining}%"
-            if extra_pct:
-                weekly_text += f" (Extra: {extra_pct}% used)"
-            self.weekly_item.title = weekly_text
-
-            # Weekly reset time (from Claude)
-            if weekly_resets:
-                self.weekly_resets_item.title = f"Resets {weekly_resets}"
-            else:
-                self.weekly_resets_item.title = "Resets: --"
-
-            from datetime import datetime
-            self.last_updated_item.title = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
+                # Data is bad - use cached data with stale indicator
+                self.debug_item.title = f"Debug: Got ??, using cached"
+                self._show_stale_data()
 
         except Exception as e:
             self.debug_item.title = f"Debug: Parse error - {str(e)[:30]}"
-            self.set_error("Parse error")
+            self._show_stale_data()
+
+    def _update_ui_from_data(self, data):
+        """Update UI from data dict (either fresh or cached)."""
+        from datetime import datetime
+
+        account_email = data.get('ACCOUNT_EMAIL')
+        plan_type = data.get('PLAN_TYPE')
+        session_remaining = data.get('SESSION_REMAINING', '??')
+        weekly_remaining = data.get('WEEKLY_REMAINING', '??')
+        extra_pct = data.get('EXTRA_USED')
+        time_remaining_str = data.get('TIME_REMAINING_STR')
+        confidence = data.get('CONFIDENCE')
+        session_resets = data.get('SESSION_RESETS')
+        weekly_resets = data.get('WEEKLY_RESETS')
+        exhausts_before_reset = data.get('EXHAUSTS_BEFORE_RESET') == 'true'
+
+        # Determine which robot emoji to use
+        robot = "😴" if self.is_stale else "🤖"
+
+        # Update debug - show exhaustion status
+        exhaust_str = "WARN" if exhausts_before_reset else "ok"
+        stale_str = " STALE" if self.is_stale else ""
+        self.debug_item.title = f"Debug: OK ({len(data)} vals, {exhaust_str}{stale_str})"
+
+        # Update UI - show warning if will exhaust before reset
+        warning = "⚠️ " if exhausts_before_reset else ""
+        if time_remaining_str and time_remaining_str != '??':
+            self.title = f"{warning}{robot} {time_remaining_str} ({session_remaining}%)"
+        else:
+            self.title = f"{robot} W:{weekly_remaining}% S:{session_remaining}%"
+
+        # Update account info
+        if account_email:
+            account_text = f"Account: {account_email}"
+            if plan_type:
+                account_text += f" ({plan_type})"
+            self.account_item.title = account_text
+        else:
+            self.account_item.title = "Account: --"
+
+        self.session_item.title = f"Session remaining: {session_remaining}%"
+
+        if time_remaining_str and time_remaining_str != '??':
+            time_text = f"Depletes in ~{time_remaining_str}"
+            if confidence:
+                try:
+                    conf = round(float(confidence) * 100)
+                    time_text += f" ({conf}% conf)"
+                except:
+                    pass
+            if exhausts_before_reset:
+                time_text += " ⚠️ before reset!"
+            self.time_remaining_item.title = time_text
+        else:
+            self.time_remaining_item.title = "Depletes: --"
+
+        # Session reset time (from Claude)
+        if session_resets:
+            reset_text = f"Resets at {session_resets}"
+            self.session_resets_item.title = reset_text
+        else:
+            self.session_resets_item.title = "Resets: --"
+
+        weekly_text = f"Weekly remaining: {weekly_remaining}%"
+        if extra_pct:
+            weekly_text += f" (Extra: {extra_pct}% used)"
+        self.weekly_item.title = weekly_text
+
+        # Weekly reset time (from Claude)
+        if weekly_resets:
+            self.weekly_resets_item.title = f"Resets {weekly_resets}"
+        else:
+            self.weekly_resets_item.title = "Resets: --"
+
+        # Show when data was last successfully fetched
+        if self.is_stale and self.last_successful_fetch:
+            self.last_updated_item.title = f"Last updated: {self.last_successful_fetch.strftime('%H:%M:%S')} (stale)"
+        else:
+            self.last_updated_item.title = f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
+
+    def _show_stale_data(self):
+        """Show cached data with stale indicator, or error if no cache."""
+        if self.last_good_data:
+            self.is_stale = True
+            self._update_ui_from_data(self.last_good_data)
+        else:
+            # No cached data yet
+            self.title = "😴 --"
+            self.session_item.title = "Session: Waiting for data..."
+            self.weekly_item.title = "Weekly: Waiting for data..."
 
     def set_error(self, msg):
-        """Set error state in UI."""
-        self.title = f"🤖 {msg}"
-        self.session_item.title = f"Session: {msg}"
-        self.weekly_item.title = f"Weekly: {msg}"
+        """Set error state in UI - use cached data with stale indicator if available."""
+        from datetime import datetime
+        self.debug_item.title = f"Debug: {msg} @ {datetime.now().strftime('%H:%M:%S')}"
+        self._show_stale_data()
 
 
 if __name__ == "__main__":
