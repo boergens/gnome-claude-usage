@@ -1,0 +1,3 @@
+#!/bin/bash
+cd "/Users/kevin/Documents/newstart/gnome_claude_usage/macos"
+exec "/Users/kevin/Documents/newstart/venv/bin/python" "/Users/kevin/Documents/newstart/gnome_claude_usage/macos/claude_usage_menubar.py"

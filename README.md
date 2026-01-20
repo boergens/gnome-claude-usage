@@ -1,8 +1,12 @@
-# Claude Usage Monitor - GNOME Extension
+# Claude Usage Monitor
 
-A GNOME Shell extension that displays your Claude Code usage (session and weekly remaining) in the top panel, with **AI-powered predictions** of when your session will be depleted.
+Display your Claude Code usage (session and weekly remaining) in your desktop panel, with **AI-powered predictions** of when your session will be depleted.
 
 ![Panel showing: 🤖 2.5h (64%)](https://img.shields.io/badge/🤖_2.5h_(64%25)-blue)
+
+**Supported platforms:**
+- **GNOME Shell** (Linux) - Extension for top panel
+- **macOS** - Menu bar utility
 
 ## Features
 
@@ -15,12 +19,58 @@ A GNOME Shell extension that displays your Claude Code usage (session and weekly
 
 ## Requirements
 
-- GNOME Shell 42-47
 - `tmux` installed
 - `python3` with PyTorch (for predictions)
 - Claude Code CLI installed and authenticated
+- **GNOME:** GNOME Shell 42-47
+- **macOS:** Python with `rumps` package
 
-## GNOME Version Compatibility
+## macOS Installation
+
+### Quick start
+
+```bash
+git clone https://github.com/boergens/gnome-claude-usage.git
+cd gnome-claude-usage/macos
+pip install rumps torch
+./run.sh
+```
+
+### Running at login
+
+To have the app start automatically:
+
+1. Create an Automator "Application" that runs the shell script
+2. Or add a LaunchAgent plist to `~/Library/LaunchAgents/`
+
+Example LaunchAgent (`~/Library/LaunchAgents/com.claude.usage.plist`):
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.claude.usage</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/path/to/gnome-claude-usage/macos/run.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+```
+
+Then load it:
+```bash
+launchctl load ~/Library/LaunchAgents/com.claude.usage.plist
+```
+
+---
+
+## GNOME Installation
+
+### GNOME Version Compatibility
 
 | GNOME Version | Extension File | Notes |
 |---------------|----------------|-------|
@@ -134,7 +184,19 @@ const REFRESH_INTERVAL_SECONDS = 300; // Change to desired seconds
 
 ## Troubleshooting
 
-### "Error" shown in panel
+### macOS: App not appearing in menu bar
+
+1. Check Terminal output for errors when running `./run.sh`
+2. Make sure `tmux` is installed: `brew install tmux`
+3. Grant Terminal/iTerm accessibility permissions in System Preferences
+4. Make sure `rumps` is installed: `pip install rumps`
+
+### macOS: Predictions not working
+
+1. Install PyTorch: `pip install torch`
+2. Check that `neural_process.py` is accessible from `claude-usage@local/`
+
+### GNOME: "Error" shown in panel
 
 1. Make sure `claude` CLI is in your PATH
 2. Make sure `tmux` is installed: `sudo apt install tmux` or `brew install tmux`
@@ -145,18 +207,18 @@ const REFRESH_INTERVAL_SECONDS = 300; // Change to desired seconds
    ```
 5. Check GNOME Shell logs: `journalctl -f -o cat /usr/bin/gnome-shell`
 
-### Predictions not working
+### GNOME: Predictions not working
 
 1. Install PyTorch: `pip install torch`
 2. Update the `PYTHON_BIN` path in `fetch_usage.sh` if using a venv
 3. Train the model: `python3 neural_process.py --train`
 
-### Extension not appearing
+### GNOME: Extension not appearing
 
 1. Verify the extension is enabled: `gnome-extensions list --enabled`
 2. Check for errors: `gnome-extensions info claude-usage@local`
 
-### Wrong GNOME version file
+### GNOME: Wrong GNOME version file
 
 If you see import errors, you may have the wrong extension.js for your GNOME version:
 - GNOME 45+: Use `extension.js` (ESM modules)
