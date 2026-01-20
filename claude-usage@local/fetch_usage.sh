@@ -113,12 +113,12 @@ account_email = account_match.group(1) if account_match else None
 plan_match = re.search(r"(Max|Pro|Team|Enterprise|Free)", account_text, re.IGNORECASE)
 plan_type = plan_match.group(1) if plan_match else None
 
-# Find session reset time - format: "Resets 9:59am (America/Chicago)" after "Current session"
-session_reset_match = re.search(r"Current session.*?Resets\s+(\d{1,2}:\d{2}[ap]m)", text, re.DOTALL | re.IGNORECASE)
+# Find session reset time - format: "Resets 10am" or "Resets 9:59am" after "Current session"
+session_reset_match = re.search(r"Current session.*?Resets\s+(\d{1,2}(?::\d{2})?[ap]m)", text, re.DOTALL | re.IGNORECASE)
 session_reset = session_reset_match.group(1) if session_reset_match else None
 
-# Find weekly reset time - format: "Resets Jan 24 at 7:59pm (America/Chicago)" after "Current week (all models)"
-weekly_reset_match = re.search(r"Current week \(all models\).*?Resets\s+(\w+\s+\d+\s+at\s+\d{1,2}:\d{2}[ap]m)", text, re.DOTALL | re.IGNORECASE)
+# Find weekly reset time - format: "Resets Jan 24 at 8pm" or "Resets Jan 24 at 7:59pm" after "Current week (all models)"
+weekly_reset_match = re.search(r"Current week \(all models\).*?Resets\s+(\w+\s+\d+\s+at\s+\d{1,2}(?::\d{2})?[ap]m)", text, re.DOTALL | re.IGNORECASE)
 weekly_reset = weekly_reset_match.group(1) if weekly_reset_match else None
 
 # Find session usage
@@ -210,6 +210,42 @@ if session_used is not None:
         print(f"TIME_REMAINING={time_remaining:.2f}")
         print(f"TIME_REMAINING_STR={time_remaining_str}")
         print(f"CONFIDENCE={confidence:.2f}")
+
+        # Check if usage will exhaust before reset
+        if session_reset and time_remaining is not None:
+            try:
+                from datetime import datetime, timedelta
+                import re as re2
+
+                # Parse reset time like "10am", "9:59am", or "10:30pm"
+                reset_match = re2.match(r"(\d{1,2})(?::(\d{2}))?([ap]m)", session_reset.lower())
+                if reset_match:
+                    hour = int(reset_match.group(1))
+                    minute = int(reset_match.group(2)) if reset_match.group(2) else 0
+                    ampm = reset_match.group(3)
+
+                    if ampm == "pm" and hour != 12:
+                        hour += 12
+                    elif ampm == "am" and hour == 12:
+                        hour = 0
+
+                    now = datetime.now()
+                    reset_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+                    # If reset time is in the past, it means tomorrow
+                    if reset_time <= now:
+                        reset_time += timedelta(days=1)
+
+                    hours_until_reset = (reset_time - now).total_seconds() / 3600
+                    print(f"HOURS_UNTIL_RESET={hours_until_reset:.2f}")
+
+                    # Compare: will we exhaust before reset?
+                    if time_remaining < hours_until_reset:
+                        print("EXHAUSTS_BEFORE_RESET=true")  # Will run out before quota refreshes
+                    else:
+                        print("EXHAUSTS_BEFORE_RESET=false")  # Quota refreshes before we run out
+            except Exception:
+                pass
 
     except Exception as e:
         # Neural process not available or failed

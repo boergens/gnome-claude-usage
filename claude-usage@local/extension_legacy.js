@@ -22,6 +22,8 @@ let sessionMenuItem = null;
 let timeRemainingMenuItem = null;
 let weeklyMenuItem = null;
 let lastUpdatedMenuItem = null;
+let sessionResetsMenuItem = null;
+let weeklyResetsMenuItem = null;
 
 function init() {
     // Nothing to initialize
@@ -50,11 +52,19 @@ function enable() {
     timeRemainingMenuItem.sensitive = false;
     indicator.menu.addMenuItem(timeRemainingMenuItem);
 
+    sessionResetsMenuItem = new PopupMenu.PopupMenuItem('Resets: --');
+    sessionResetsMenuItem.sensitive = false;
+    indicator.menu.addMenuItem(sessionResetsMenuItem);
+
     indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
     weeklyMenuItem = new PopupMenu.PopupMenuItem('Weekly: Loading...');
     weeklyMenuItem.sensitive = false;
     indicator.menu.addMenuItem(weeklyMenuItem);
+
+    weeklyResetsMenuItem = new PopupMenu.PopupMenuItem('Resets: --');
+    weeklyResetsMenuItem.sensitive = false;
+    indicator.menu.addMenuItem(weeklyResetsMenuItem);
 
     indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -146,6 +156,9 @@ function parseUsage(output) {
         const extraUsed = data['EXTRA_USED'];
         const timeRemainingStr = data['TIME_REMAINING_STR'];
         const confidence = data['CONFIDENCE'];
+        const sessionResets = data['SESSION_RESETS'];
+        const weeklyResets = data['WEEKLY_RESETS'];
+        const exhaustsBeforeReset = data['EXHAUSTS_BEFORE_RESET'] === 'true';
 
         // Update account info
         if (accountEmail) {
@@ -159,8 +172,10 @@ function parseUsage(output) {
         }
 
         // Show time remaining in panel if available, otherwise show percentages
+        // Add warning indicator if will exhaust before reset
+        const warning = exhaustsBeforeReset ? '⚠️ ' : '';
         if (timeRemainingStr) {
-            panelLabel.set_text(`🤖 ${timeRemainingStr} (${sessionRemaining}%)`);
+            panelLabel.set_text(`${warning}🤖 ${timeRemainingStr} (${sessionRemaining}%)`);
         } else {
             panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
         }
@@ -174,15 +189,32 @@ function parseUsage(output) {
                 const conf = Math.round(parseFloat(confidence) * 100);
                 timeText += ` (${conf}% conf)`;
             }
+            if (exhaustsBeforeReset) {
+                timeText += ' ⚠️ before reset!';
+            }
             timeRemainingMenuItem.label.set_text(timeText);
         } else {
             timeRemainingMenuItem.label.set_text('Predicted time left: --');
+        }
+
+        // Session reset time
+        if (sessionResets) {
+            sessionResetsMenuItem.label.set_text(`Resets at ${sessionResets}`);
+        } else {
+            sessionResetsMenuItem.label.set_text('Resets: --');
         }
 
         weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}%`);
 
         if (extraUsed) {
             weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}% (Extra: ${extraUsed}% used)`);
+        }
+
+        // Weekly reset time
+        if (weeklyResets) {
+            weeklyResetsMenuItem.label.set_text(`Resets ${weeklyResets}`);
+        } else {
+            weeklyResetsMenuItem.label.set_text('Resets: --');
         }
 
         const now = new Date();

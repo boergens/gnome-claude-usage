@@ -64,6 +64,7 @@ class ClaudeUsageTray:
         self.confidence = None
         self.session_resets = None
         self.weekly_resets = None
+        self.exhausts_before_reset = False
         self.last_updated = "Never"
         self.debug_status = "Starting..."
         self.running = True
@@ -97,17 +98,19 @@ class ClaudeUsageTray:
                     text += f" ({conf}% conf)"
                 except:
                     pass
+            if self.exhausts_before_reset:
+                text += " - before reset!"
             return text
         return "Depletes: --"
 
     def get_session_resets_text(self):
         if self.session_resets:
-            return f"Resets in {self.session_resets}"
+            return f"Resets at {self.session_resets}"
         return "Resets: --"
 
     def get_weekly_resets_text(self):
         if self.weekly_resets:
-            return f"Resets in {self.weekly_resets}"
+            return f"Resets {self.weekly_resets}"
         return "Resets: --"
 
     def create_menu(self):
@@ -231,12 +234,14 @@ class ClaudeUsageTray:
             self.confidence = data.get('CONFIDENCE')
             self.session_resets = data.get('SESSION_RESETS')
             self.weekly_resets = data.get('WEEKLY_RESETS')
+            self.exhausts_before_reset = data.get('EXHAUSTS_BEFORE_RESET') == 'true'
             self.last_updated = datetime.now().strftime('%H:%M:%S')
             self.debug_status = f"OK ({len(data)} values)"
 
-            # Update tooltip
+            # Update tooltip - show warning if will exhaust before reset
+            warning = "[!] " if self.exhausts_before_reset else ""
             if self.time_remaining_str and self.time_remaining_str != "??":
-                self.update_tooltip(f"Claude: {self.time_remaining_str} ({self.session_remaining}%)")
+                self.update_tooltip(f"{warning}Claude: {self.time_remaining_str} ({self.session_remaining}%)")
             else:
                 self.update_tooltip(f"Claude: S:{self.session_remaining}% W:{self.weekly_remaining}%")
 

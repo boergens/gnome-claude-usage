@@ -148,13 +148,16 @@ class ClaudeUsageApp(rumps.App):
             confidence = data.get('CONFIDENCE')
             session_resets = data.get('SESSION_RESETS')
             weekly_resets = data.get('WEEKLY_RESETS')
+            exhausts_before_reset = data.get('EXHAUSTS_BEFORE_RESET') == 'true'
 
-            # Update debug
-            self.debug_item.title = f"Debug: OK ({len(data)} values)"
+            # Update debug - show exhaustion status
+            exhaust_str = "WARN" if exhausts_before_reset else "ok"
+            self.debug_item.title = f"Debug: OK ({len(data)} vals, {exhaust_str})"
 
-            # Update UI
+            # Update UI - show warning if will exhaust before reset
+            warning = "⚠️ " if exhausts_before_reset else ""
             if time_remaining_str and time_remaining_str != '??':
-                self.title = f"🤖 {time_remaining_str} ({session_remaining}%)"
+                self.title = f"{warning}🤖 {time_remaining_str} ({session_remaining}%)"
             else:
                 self.title = f"🤖 W:{weekly_remaining}% S:{session_remaining}%"
 
@@ -177,13 +180,16 @@ class ClaudeUsageApp(rumps.App):
                         time_text += f" ({conf}% conf)"
                     except:
                         pass
+                if exhausts_before_reset:
+                    time_text += " ⚠️ before reset!"
                 self.time_remaining_item.title = time_text
             else:
                 self.time_remaining_item.title = "Depletes: --"
 
             # Session reset time (from Claude)
             if session_resets:
-                self.session_resets_item.title = f"Resets in {session_resets}"
+                reset_text = f"Resets at {session_resets}"
+                self.session_resets_item.title = reset_text
             else:
                 self.session_resets_item.title = "Resets: --"
 
@@ -194,7 +200,7 @@ class ClaudeUsageApp(rumps.App):
 
             # Weekly reset time (from Claude)
             if weekly_resets:
-                self.weekly_resets_item.title = f"Resets in {weekly_resets}"
+                self.weekly_resets_item.title = f"Resets {weekly_resets}"
             else:
                 self.weekly_resets_item.title = "Resets: --"
 

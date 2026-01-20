@@ -45,11 +45,19 @@ export default class ClaudeUsageExtension extends Extension {
         this._timeRemainingMenuItem.sensitive = false;
         this._indicator.menu.addMenuItem(this._timeRemainingMenuItem);
 
+        this._sessionResetsMenuItem = new PopupMenu.PopupMenuItem('Resets: --');
+        this._sessionResetsMenuItem.sensitive = false;
+        this._indicator.menu.addMenuItem(this._sessionResetsMenuItem);
+
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         this._weeklyMenuItem = new PopupMenu.PopupMenuItem('Weekly: Loading...');
         this._weeklyMenuItem.sensitive = false;
         this._indicator.menu.addMenuItem(this._weeklyMenuItem);
+
+        this._weeklyResetsMenuItem = new PopupMenu.PopupMenuItem('Resets: --');
+        this._weeklyResetsMenuItem.sensitive = false;
+        this._indicator.menu.addMenuItem(this._weeklyResetsMenuItem);
 
         this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -146,6 +154,9 @@ export default class ClaudeUsageExtension extends Extension {
             const extraUsed = data['EXTRA_USED'];
             const timeRemainingStr = data['TIME_REMAINING_STR'];
             const confidence = data['CONFIDENCE'];
+            const sessionResets = data['SESSION_RESETS'];
+            const weeklyResets = data['WEEKLY_RESETS'];
+            const exhaustsBeforeReset = data['EXHAUSTS_BEFORE_RESET'] === 'true';
 
             // Update UI
             this._sessionUsage = `${sessionRemaining}%`;
@@ -164,8 +175,10 @@ export default class ClaudeUsageExtension extends Extension {
             }
 
             // Show time remaining in panel if available, otherwise show percentages
+            // Add warning indicator if will exhaust before reset
+            const warning = exhaustsBeforeReset ? '⚠️ ' : '';
             if (timeRemainingStr) {
-                this._panelLabel.set_text(`🤖 ${timeRemainingStr} (${sessionRemaining}%)`);
+                this._panelLabel.set_text(`${warning}🤖 ${timeRemainingStr} (${sessionRemaining}%)`);
             } else {
                 this._panelLabel.set_text(`🤖 W:${weeklyRemaining}% S:${sessionRemaining}%`);
             }
@@ -179,15 +192,32 @@ export default class ClaudeUsageExtension extends Extension {
                     const conf = Math.round(parseFloat(confidence) * 100);
                     timeText += ` (${conf}% conf)`;
                 }
+                if (exhaustsBeforeReset) {
+                    timeText += ' ⚠️ before reset!';
+                }
                 this._timeRemainingMenuItem.label.set_text(timeText);
             } else {
                 this._timeRemainingMenuItem.label.set_text('Predicted time left: --');
+            }
+
+            // Session reset time
+            if (sessionResets) {
+                this._sessionResetsMenuItem.label.set_text(`Resets at ${sessionResets}`);
+            } else {
+                this._sessionResetsMenuItem.label.set_text('Resets: --');
             }
 
             this._weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}%`);
 
             if (extraUsed) {
                 this._weeklyMenuItem.label.set_text(`Weekly remaining: ${weeklyRemaining}% (Extra: ${extraUsed}% used)`);
+            }
+
+            // Weekly reset time
+            if (weeklyResets) {
+                this._weeklyResetsMenuItem.label.set_text(`Resets ${weeklyResets}`);
+            } else {
+                this._weeklyResetsMenuItem.label.set_text('Resets: --');
             }
 
             const now = new Date();
